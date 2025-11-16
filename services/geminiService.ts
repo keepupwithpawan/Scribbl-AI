@@ -1,170 +1,127 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import type { DigitalNotesData, PhysicalNotesData } from '../types';
 
-// This is a MOCK transcript. To guarantee the correct demo behavior, 
-// we will always return the DBMS transcript.
-const MOCK_DBMS_TRANSCRIPT_HINDI_ENGLISH = `
-(0:01) Namaste dosto, aaj hum DBMS, yaani Database Management System, ke baare mein baat karenge. Yeh ek software hai jo database ko create aur manage karne mein help karta hai.
-(0:25) Sabse important concept hai 'ACID properties'. ACID stands for Atomicity, Consistency, Isolation, and Durability. Chalo inko ek-ek karke samjhein.
-(1:00) Atomicity ka matlab hai ki transaction ya toh poori hogi, ya bilkul nahi. 'All or nothing'. Jaise bank transfer, ya toh paise poore transfer honge, ya transaction fail ho jayegi.
-(1:45) Consistency ensures ki har transaction database ko ek valid state se doosre valid state mein le jaati hai. Koi bhi data integrity constraints violate nahi hone chahiye.
-(2:30) Isolation property ka matlab hai ki multiple transactions ek saath ho sakti hain without interfering with each other. Har transaction ko lagta hai ki woh system mein akeli chal rahi hai.
-(3:15) Aur aakhir mein, Durability. Iska matlab hai ki jab ek transaction successfully commit ho jaati hai, toh woh changes permanent hote hain. System crash hone par bhi data loss nahi hoga.
-(4:00) Normalization ek aur critical topic hai. Yeh process data redundancy ko kam karne aur data integrity ko improve karne ke liye use hota hai. Iske different forms hain, jaise 1NF, 2NF, 3NF.
-(4:45) For example, 1NF (First Normal Form) kehta hai ki har table cell mein single value honi chahiye. Koi repeating groups nahi.
-(5:20) Toh yeh the kuch basic but very important DBMS concepts. Inko aache se samajhna bohot zaroori hai. Thank you.
-`;
+/**
+ * Validates a YouTube video URL, including standard, shortened, and live stream links.
+ * @param url The YouTube video URL.
+ * @returns true if the URL is a valid YouTube video link, false otherwise.
+ */
+export const isValidYoutubeUrl = (url: string): boolean => {
+    const youtubeRegex = /^(?:https?:\/\/)?(?:www\.)?(?:m\.)?(?:youtube\.com\/(?:watch\?v=|live\/)|youtu\.be\/)([\w-]{11})(?:\S*)?$/;
+    return youtubeRegex.test(url);
+};
+
+/**
+ * Extracts a JSON object from a string, which might be wrapped in markdown.
+ * @param text The string to extract JSON from.
+ * @returns The clean JSON string.
+ */
+const extractJsonFromString = (text: string): string => {
+    const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
+    const match = text.match(jsonRegex);
+    if (match && match[1]) {
+        return match[1];
+    }
+    return text.trim();
+};
 
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const model = "gemini-2.5-flash";
 
-export const getYoutubeTranscriptMock = async (url: string): Promise<string> => {
-    console.log(`Fetching transcript for ${url}... (mocked, always returning DBMS content)`);
-    // To guarantee the correct demo behavior, we will always return the DBMS transcript.
-    return MOCK_DBMS_TRANSCRIPT_HINDI_ENGLISH;
-};
 
-const digitalNotesSchema = {
-    type: Type.OBJECT,
-    properties: {
-        title: { type: Type.STRING, description: 'A concise, engaging title for the lecture notes.' },
-        summary: { type: Type.STRING, description: 'A 2-3 paragraph summary of the entire lecture.' },
-        keyTopics: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    topicTitle: { type: Type.STRING },
-                    content: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                type: { type: Type.STRING, description: '"bullet", "paragraph", or "image_idea"' },
-                                point: { type: Type.STRING, nullable: true },
-                                text: { type: Type.STRING, nullable: true },
-                                description: { type: Type.STRING, nullable: true }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        chartsAndGraphs: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    title: { type: Type.STRING },
-                    type: { type: Type.STRING, description: '"flowchart" or "bar_chart"' },
-                    data: { type: Type.ANY, description: 'For flowchart: An array of strings representing steps. For bar_chart: an array of objects like {label: string, value: number}.'},
-                    description: { type: Type.STRING }
-                }
-            }
-        },
-        practiceQuestions: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    question: { type: Type.STRING },
-                    type: { type: Type.STRING }
-                }
-            }
-        }
-    },
-    required: ["title", "summary", "keyTopics", "chartsAndGraphs", "practiceQuestions"]
-};
+export const generateDigitalNotes = async (videoUrl: string): Promise<DigitalNotesData> => {
+    const prompt = `You are an expert academic assistant. Your task is to generate structured study notes from a YouTube lecture.
+Your response MUST be a valid JSON object. Do not include any text, explanation, or markdown formatting like \`\`\`json before or after the JSON object.
 
-const physicalNotesSchema = {
-    type: Type.OBJECT,
-    properties: {
-        title: { type: Type.STRING, description: 'A clear and simple title for the notes.' },
-        mainSummary: { type: Type.STRING, description: 'A brief, 1-2 sentence summary.' },
-        sections: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    heading: { type: Type.STRING },
-                    points: {
-                        type: Type.ARRAY,
-                        items: { type: Type.STRING }
-                    },
-                    diagramIdea: {
-                        type: Type.OBJECT,
-                        nullable: true,
-                        properties: {
-                            title: { type: Type.STRING },
-                            description: { type: Type.STRING }
-                        }
-                    }
-                }
-            }
-        }
-    },
-    required: ["title", "mainSummary", "sections"]
-};
+Using your built-in search capabilities, analyze the content of the YouTube video at the following URL: ${videoUrl}
 
+Generate the JSON object based on the following structure:
+- title: A concise, engaging title for the lecture notes.
+- summary: A 2-3 paragraph summary of the entire lecture.
+- keyTopics: An array of 3-4 main topics. Each topic object should have:
+  - topicTitle: The title of the topic.
+  - content: An array of content items, which can be of type "bullet" (with a "point" string), "paragraph" (with a "text" string), or "image_idea" (with a "description" string suitable for an image generation AI). Include at least two "image_idea" blocks.
+- chartsAndGraphs: An array of at least one "flowchart" and one "bar_chart". Each chart object should have:
+  - title: The chart's title.
+  - type: "flowchart" or "bar_chart".
+  - data: For a flowchart, an array of strings representing the steps. For a bar_chart, an array of {label: string, value: number} objects.
+  - description: A brief description of the chart.
+- practiceQuestions: An array of 3-5 practice question objects, each with a "question" string and a "type" string.
 
-export const generateDigitalNotes = async (transcript: string): Promise<DigitalNotesData> => {
-    const prompt = `You are an expert academic assistant creating visually-rich study notes from a lecture transcript.
-The transcript may be in a mixed language (e.g., Hindi/English). IMPORTANT: Your entire output and all generated text MUST be exclusively in English.
-
-Generate structured notes in JSON format based on the provided schema.
-- Identify 3-4 main topics.
-- For each topic, create a mix of bullet points and paragraphs.
-- Include at least two relevant "image_idea" content blocks within the topics. The description for each image idea must be a detailed visual prompt suitable for an image generation AI.
-- Generate at least one "flowchart" and one "bar_chart" in the "chartsAndGraphs" section.
-  - For "flowchart", the "data" field must be an array of strings representing the steps.
-  - For "bar_chart", the "data" field must be an array of objects, each with a "label" (string) and "value" (number).
-- Generate 3-5 practice questions.
-
-Transcript:
----
-${transcript}
----`;
+IMPORTANT: If you are unable to access the video's content or generate notes for any reason, you MUST return the following JSON object and nothing else: {"error": true, "errorMessage": "Failed to access or process the video content."}
+Your entire output and all generated text within the JSON MUST be exclusively in English.
+`;
     
     try {
         const response = await ai.models.generateContent({
             model,
             contents: prompt,
             config: {
-                responseMimeType: "application/json",
-                responseSchema: digitalNotesSchema,
+                tools: [{googleSearch: {}}],
             },
         });
-        const jsonText = response.text.trim();
-        return JSON.parse(jsonText) as DigitalNotesData;
+        const rawText = response.text;
+        const jsonText = extractJsonFromString(rawText);
+        const parsedData = JSON.parse(jsonText);
+
+        if (parsedData.error) {
+            throw new Error(parsedData.errorMessage || "The AI model failed to process the video. It may be private or have restrictions.");
+        }
+
+        return parsedData as DigitalNotesData;
     } catch (error) {
         console.error("Error generating digital notes:", error);
-        throw new Error("Failed to generate digital notes. Please try again.");
+        if (error instanceof SyntaxError) {
+             throw new Error("The AI returned an invalid response. The video might be private, very new, or have other restrictions. Please try a different URL.");
+        }
+        throw new Error("Failed to generate digital notes. The video content might be inaccessible or the topic too complex. Please try a different video.");
     }
 };
 
-export const generatePhysicalNotesLayout = async (transcript: string): Promise<PhysicalNotesData> => {
-    const prompt = `You are an expert note-taker creating a layout for handwritten notes from a lecture transcript. The output must be JSON. Keep text concise for easy writing. Use bullet points extensively. Diagram ideas must be extremely simple, using basic shapes (boxes, circles, arrows). The transcript may be in a different language, but your output must be in English.
+export const generatePhysicalNotesLayout = async (videoUrl: string): Promise<PhysicalNotesData> => {
+    const prompt = `You are an expert note-taker. Your task is to create a layout for handwritten notes from a YouTube lecture.
+Your response MUST be a valid JSON object. Do not include any text, explanation, or markdown formatting like \`\`\`json before or after the JSON object.
 
-Transcript:
----
-${transcript}
----`;
+Keep text concise for easy writing. Use bullet points extensively. Diagram ideas must be extremely simple, using basic shapes (boxes, circles, arrows).
+
+Using your built-in search capabilities, analyze the content of the YouTube video at the following URL: ${videoUrl}
+
+Generate the JSON object based on the following structure:
+- title: A clear and simple title for the notes.
+- mainSummary: A brief, 1-2 sentence summary.
+- sections: An array of section objects. Each section should have:
+  - heading: The section heading.
+  - points: An array of strings for bullet points.
+  - diagramIdea: (Optional) An object with a "title" and a "description" for a simple drawing.
+
+IMPORTANT: If you are unable to access the video's content or generate notes for any reason, you MUST return the following JSON object and nothing else: {"error": true, "errorMessage": "Failed to access or process the video content."}
+Your entire output and all generated text within the JSON MUST be exclusively in English.
+`;
 
     try {
         const response = await ai.models.generateContent({
             model,
             contents: prompt,
             config: {
-                responseMimeType: "application/json",
-                responseSchema: physicalNotesSchema,
+                tools: [{googleSearch: {}}],
             },
         });
-        const jsonText = response.text.trim();
-        return JSON.parse(jsonText) as PhysicalNotesData;
+        const rawText = response.text;
+        const jsonText = extractJsonFromString(rawText);
+        const parsedData = JSON.parse(jsonText);
+        
+        if (parsedData.error) {
+            throw new Error(parsedData.errorMessage || "The AI model failed to process the video. It may be private or have restrictions.");
+        }
+
+        return parsedData as PhysicalNotesData;
     } catch (error) {
         console.error("Error generating physical notes:", error);
-        throw new Error("Failed to generate physical notes layout. Please try again.");
+        if (error instanceof SyntaxError) {
+             throw new Error("The AI returned an invalid response. The video might be private, very new, or have other restrictions. Please try a different URL.");
+        }
+        throw new Error("Failed to generate physical notes layout. The video content might be inaccessible. Please try again.");
     }
 };
 

@@ -7,15 +7,16 @@ import { GitHubIcon } from './icons';
 interface HeaderProps {
   theme: Theme;
   toggleTheme: () => void;
+  isScrolled: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
+export const Header: React.FC<HeaderProps> = ({ theme, toggleTheme, isScrolled }) => {
   return (
-    <header className="sticky top-0 z-50 p-4">
+    <header className={`sticky top-0 z-50 p-4 transition-all duration-300 ${isScrolled ? 'bg-neutral-100/80 dark:bg-neutral-900/80 backdrop-blur-sm shadow-md' : 'bg-transparent'}`}>
       <div className="container mx-auto flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100">
-            Scribbbl AI
+          <h1 className="text-2xl md:text-3xl text-black dark:text-white font-handwriting lowercase">
+            Scribbl AI
           </h1>
         </div>
         <div className="flex items-center gap-4">

@@ -7,7 +7,7 @@ import { DigitalNotesView } from './components/DigitalNotesView';
 import { PhysicalNotesView } from './components/PhysicalNotesView';
 import { Loader } from './components/Loader';
 import {
-  getYoutubeTranscriptMock,
+  isValidYoutubeUrl,
   generateDigitalNotes,
   generatePhysicalNotesLayout,
   generateImageFromPrompt,
@@ -15,7 +15,8 @@ import {
 
 const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>('dark');
-  const [url, setUrl] = useState<string>('https://www.youtube.com/watch?v=mock_dbms_lecture');
+  const [url, setUrl] = useState<string>('');
+  const [isScrolled, setIsScrolled] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'input' | 'select' | 'view'>('input');
@@ -34,15 +35,21 @@ const App: React.FC = () => {
     }
   }, [theme]);
 
+  useEffect(() => {
+    const handleScroll = () => {
+        setIsScrolled(window.scrollY > 10);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const toggleTheme = () => {
     setTheme((prevTheme) => (prevTheme === 'light' ? 'dark' : 'light'));
   };
   
   const handleInitialGenerate = () => {
-    // Basic URL validation
-    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
-    if (!youtubeRegex.test(url) && !url.includes('mock_dbms_lecture')) { // Allow mock URL
-        setError('Please enter a valid YouTube URL.');
+    if (!isValidYoutubeUrl(url)) {
+        setError('Please enter a valid YouTube video URL.');
         return;
     }
     setError(null);
@@ -83,29 +90,28 @@ const App: React.FC = () => {
     setActiveNoteType(type);
 
     try {
-        const transcript = await getYoutubeTranscriptMock(url);
-
         if (type === 'digital') {
-            const initialNotes = await generateDigitalNotes(transcript);
-            // Now, generate images for the image_idea placeholders
+            const initialNotes = await generateDigitalNotes(url);
             const finalNotes = await enrichNotesWithImages(initialNotes);
             setDigitalNotes(finalNotes);
         } else if (type === 'physical') {
-            const notes = await generatePhysicalNotesLayout(transcript);
+            const notes = await generatePhysicalNotesLayout(url);
             setPhysicalNotes(notes);
         }
         setStep('view');
 
     } catch (err) {
         setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-        setStep('input'); // Reset to input on error
+        // On failure, revert to the selection step to show the error
+        // without forcing the user to re-enter the URL.
+        setStep('select'); 
     } finally {
         setIsLoading(false);
     }
   }, [url]);
   
   const resetApp = () => {
-      setUrl('https://www.youtube.com/watch?v=mock_dbms_lecture');
+      setUrl('');
       setDigitalNotes(null);
       setPhysicalNotes(null);
       setActiveNoteType(null);
@@ -131,8 +137,6 @@ const App: React.FC = () => {
             <h2 className="text-4xl md:text-6xl text-black dark:text-white mb-4 animate-fade-in font-pt-serif-italic">Generate Notes from any Lecture</h2>
             <p className="text-lg md:text-xl text-neutral-600 dark:text-neutral-400 mb-8 max-w-2xl animate-fade-in" style={{ animationDelay: '100ms', opacity: 0 }}>
                 Paste a YouTube video link to instantly create comprehensive digital notes or a handy physical note-taking layout.
-                <br />
-                <small>(Note: This demo uses a mock transcript for a DBMS lecture to showcase functionality.)</small>
             </p>
             <UrlInputForm url={url} setUrl={setUrl} handleGenerate={handleInitialGenerate} isLoading={false} />
             {error && <p className="mt-4 text-red-500 dark:text-red-400 animate-fade-in">{error}</p>}
@@ -153,7 +157,7 @@ const App: React.FC = () => {
 
       {isLoading && <Loader />}
       
-      <Header theme={theme} toggleTheme={toggleTheme} />
+      <Header theme={theme} toggleTheme={toggleTheme} isScrolled={isScrolled} />
 
       <main className="container mx-auto px-4 py-8">
         {renderContent()}

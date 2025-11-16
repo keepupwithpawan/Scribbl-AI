@@ -18,10 +18,10 @@ const SelectorButton: React.FC<{
     <button
         onClick={onClick}
         disabled={disabled}
-        className="w-full text-left p-6 bg-transparent rounded-2xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-all duration-300 transform hover:-translate-y-1 disabled:opacity-50 disabled:transform-none"
+        className="w-full text-left p-6 bg-white dark:bg-black rounded-2xl border-2 border-neutral-200 dark:border-neutral-800 hover:border-black dark:hover:border-white hover:rounded-3xl transition-all duration-300 disabled:opacity-50 disabled:transform-none"
     >
         <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 bg-neutral-100 dark:bg-neutral-800 p-3 rounded-full">
+            <div className="flex-shrink-0 bg-neutral-100 dark:bg-neutral-900 p-3 rounded-xl">
                 {icon}
             </div>
             <div>

@@ -1,5 +1,5 @@
 {
-  "name": "Scribbbl AI",
+  "name": "Scribbl AI",
   "description": "An application for students to generate beautifully curated digital or physical notes from any YouTube lecture using AI. Supports multiple languages and provides options for downloading notes as PDFs.",
   "requestFramePermissions": []
 }
